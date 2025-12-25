@@ -3,8 +3,9 @@ export interface Song {
   title: string;
   artist: string;
   url: string;
-  file: File;
+  file?: File;
   duration: number;
+  isCloud?: boolean;
 }
 
 export interface PlaylistAnalysis {

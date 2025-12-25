@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Music, Trash2 } from 'lucide-react';
+import { Play, Music, Trash2, Cloud, HardDrive } from 'lucide-react';
 import { Song } from '../types';
 
 interface SongListProps {
@@ -52,6 +52,15 @@ const SongList: React.FC<SongListProps> = ({ songs, currentSong, isPlaying, isAd
               </span>
             </div>
 
+            {/* Icon indicating Cloud vs Local */}
+            <div className="mr-3 text-slate-500">
+               {song.isCloud ? (
+                 <Cloud size={16} className="text-blue-400/70" title="Cloud Track (Visible to All)" />
+               ) : (
+                 <HardDrive size={16} className="text-orange-400/70" title="Local Upload (Visible only to you)" />
+               )}
+            </div>
+
             <div className="flex-1 min-w-0">
               <div className={`font-medium truncate ${isCurrent ? 'text-green-400' : 'text-white'}`}>
                 {song.title}
@@ -61,18 +70,18 @@ const SongList: React.FC<SongListProps> = ({ songs, currentSong, isPlaying, isAd
               </div>
             </div>
 
-            <div className="text-slate-500 text-sm mr-4">
-               {/* Metadata duration usually requires async parsing, simplified here */}
-               --:--
+            <div className="text-slate-500 text-sm mr-4 hidden md:block">
+               {song.isCloud ? "Global" : "Local"}
             </div>
 
-            {isAdmin && (
+            {isAdmin && !song.isCloud && (
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove(song.id);
                 }}
                 className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Remove Local Track"
               >
                 <Trash2 size={18} />
               </button>

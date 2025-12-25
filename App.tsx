@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Sparkles, Menu, ExternalLink, Lock, Upload, CheckCircle } from 'lucide-react';
+import { Loader2, Sparkles, Menu, ExternalLink, Lock, Upload, CheckCircle, Music, Cloud } from 'lucide-react';
 import { Song, PlaylistAnalysis, View, EQPreset } from './types';
 import PlayerControls from './components/PlayerControls';
 import SongList from './components/SongList';
@@ -10,8 +10,46 @@ import AdminLoginModal from './components/AdminLoginModal';
 import EQPanel from './components/EQPanel';
 import { analyzePlaylistVibe } from './services/geminiService';
 
+// GLOBAL CLOUD LIBRARY
+// These songs are hosted on the internet and will be visible to ANYONE who visits the app
+const GLOBAL_LIBRARY: Song[] = [
+  {
+    id: 'cloud-1',
+    title: 'Summer Walk',
+    artist: 'Olexy (Global Hit)',
+    url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=summer-walk-112694.mp3',
+    duration: 0,
+    isCloud: true
+  },
+  {
+    id: 'cloud-2',
+    title: 'Lofi Chill',
+    artist: 'FASSounds',
+    url: 'https://cdn.pixabay.com/download/audio/2022/02/10/audio_fc8c8375ae.mp3?filename=lofi-study-112191.mp3',
+    duration: 0,
+    isCloud: true
+  },
+  {
+    id: 'cloud-3',
+    title: 'Cyberpunk City',
+    artist: 'Serhio Originals',
+    url: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=cyberpunk-city-115516.mp3',
+    duration: 0,
+    isCloud: true
+  },
+   {
+    id: 'cloud-4',
+    title: 'Good Night',
+    artist: 'FASSounds',
+    url: 'https://cdn.pixabay.com/download/audio/2022/04/27/audio_30db2fd25d.mp3?filename=good-night-112676.mp3',
+    duration: 0,
+    isCloud: true
+  }
+];
+
 const App: React.FC = () => {
-  const [songs, setSongs] = useState<Song[]>([]);
+  // Initialize with Global Library
+  const [songs, setSongs] = useState<Song[]>(GLOBAL_LIBRARY);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -29,6 +67,7 @@ const App: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [showAdminToast, setShowAdminToast] = useState(false);
+  const [showUploadToast, setShowUploadToast] = useState<{show: boolean, count: number}>({show: false, count: 0});
   
   // Audio Refs
   const audioRef = useRef<HTMLAudioElement>(new Audio());
@@ -134,30 +173,47 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, currentSong]);
 
+  const generateId = () => {
+    // Safer ID generation than crypto.randomUUID() for older browsers/http
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    const newSongs: Song[] = Array.from(files).map((file: File) => {
-      const name = file.name.replace(/\.[^/.]+$/, "");
-      return {
-        id: crypto.randomUUID(),
-        title: name,
-        artist: "Local Artist", 
-        url: URL.createObjectURL(file),
-        file: file,
-        duration: 0
-      };
-    });
+    try {
+      const newSongs: Song[] = Array.from(files).map((file: File) => {
+        // Remove extension from name
+        const name = file.name.replace(/\.[^/.]+$/, "");
+        return {
+          id: generateId(),
+          title: name,
+          artist: "Local Upload", 
+          url: URL.createObjectURL(file),
+          file: file,
+          duration: 0,
+          isCloud: false
+        };
+      });
 
-    setSongs((prev) => {
-      const updated = [...prev, ...newSongs];
-      return updated;
-    });
-    
-    // Switch to library to show upload success
-    setCurrentView('library');
-    setMobileMenuOpen(false);
+      setSongs((prev) => {
+        // Combine uploads with existing library
+        const updated = [...prev, ...newSongs];
+        return updated;
+      });
+      
+      // Show Success Toast
+      setShowUploadToast({ show: true, count: newSongs.length });
+      setTimeout(() => setShowUploadToast({ show: false, count: 0 }), 3000);
+
+      // Switch to library to show upload success
+      setCurrentView('library');
+      setMobileMenuOpen(false);
+    } catch (error) {
+      console.error("Error processing files:", error);
+      alert("Error processing files. Please try again.");
+    }
 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -262,7 +318,7 @@ const App: React.FC = () => {
         type="file" 
         ref={fileInputRef} 
         onChange={handleFileUpload} 
-        accept="audio/*" 
+        accept="audio/*,.mp3,.wav,.ogg,.m4a" 
         multiple 
         className="hidden" 
       />
@@ -276,8 +332,16 @@ const App: React.FC = () => {
       {/* Admin Success Toast */}
       {showAdminToast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300">
-          <CheckCircle size={20} className="text-white" />
+          <Lock size={20} className="text-white" />
           <span className="font-semibold">Welcome Back, Admin</span>
+        </div>
+      )}
+
+      {/* Upload Success Toast */}
+      {showUploadToast.show && (
+        <div className="fixed top-20 md:top-6 left-1/2 -translate-x-1/2 z-[100] bg-indigo-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300">
+          <Music size={20} className="text-white" />
+          <span className="font-semibold">{showUploadToast.count} songs added to library</span>
         </div>
       )}
 
@@ -333,7 +397,7 @@ const App: React.FC = () => {
                   <div>
                     <h2 className="text-3xl font-bold mb-1">Library</h2>
                     <p className="text-slate-400">
-                      {isAdmin ? "Manage uploads and remove tracks" : "View your collection"}
+                      {isAdmin ? "Global & Local Tracks" : "Public Collection"}
                     </p>
                   </div>
                   
