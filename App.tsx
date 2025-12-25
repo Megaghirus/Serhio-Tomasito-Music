@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Sparkles, Menu, ExternalLink, Lock, Upload, CheckCircle, Music, Cloud, Link as LinkIcon } from 'lucide-react';
+import { Loader2, Sparkles, Menu, ExternalLink, Lock, Upload, CheckCircle, Music, Cloud, Link as LinkIcon, Wifi, WifiOff } from 'lucide-react';
 import { Song, PlaylistAnalysis, View, EQPreset } from './types';
 import PlayerControls from './components/PlayerControls';
 import SongList from './components/SongList';
@@ -9,45 +9,10 @@ import HomeView from './components/HomeView';
 import AdminLoginModal from './components/AdminLoginModal';
 import EQPanel from './components/EQPanel';
 import { analyzePlaylistVibe } from './services/geminiService';
-
-// GLOBAL CLOUD LIBRARY
-const GLOBAL_LIBRARY: Song[] = [
-  {
-    id: 'cloud-1',
-    title: 'Summer Walk',
-    artist: 'Olexy (Global Hit)',
-    url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=summer-walk-112694.mp3',
-    duration: 0,
-    isCloud: true
-  },
-  {
-    id: 'cloud-2',
-    title: 'Lofi Chill',
-    artist: 'FASSounds',
-    url: 'https://cdn.pixabay.com/download/audio/2022/02/10/audio_fc8c8375ae.mp3?filename=lofi-study-112191.mp3',
-    duration: 0,
-    isCloud: true
-  },
-  {
-    id: 'cloud-3',
-    title: 'Cyberpunk City',
-    artist: 'Serhio Originals',
-    url: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3?filename=cyberpunk-city-115516.mp3',
-    duration: 0,
-    isCloud: true
-  },
-   {
-    id: 'cloud-4',
-    title: 'Good Night',
-    artist: 'FASSounds',
-    url: 'https://cdn.pixabay.com/download/audio/2022/04/27/audio_30db2fd25d.mp3?filename=good-night-112676.mp3',
-    duration: 0,
-    isCloud: true
-  }
-];
+import { subscribeToLibrary, addSongToLibrary, removeSongFromLibrary, isLiveMode } from './services/db';
 
 const App: React.FC = () => {
-  const [songs, setSongs] = useState<Song[]>(GLOBAL_LIBRARY);
+  const [songs, setSongs] = useState<Song[]>([]);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -56,6 +21,7 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentView, setCurrentView] = useState<View>('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLive, setIsLive] = useState(false);
   
   // Audio & EQ State
   const [eqOpen, setEqOpen] = useState(false);
@@ -81,6 +47,22 @@ const App: React.FC = () => {
   const gradientFrom = analysis?.suggestedColorFrom || '#4f46e5'; 
   const gradientTo = analysis?.suggestedColorTo || '#ec4899';
 
+  // --- DATABASE SUBSCRIPTION ---
+  useEffect(() => {
+    // Initial check
+    setIsLive(isLiveMode());
+    
+    // Subscribe to real-time updates (Firebase or LocalSync)
+    const unsubscribe = subscribeToLibrary((updatedSongs) => {
+      setSongs(updatedSongs);
+      // IMPORTANT: Re-check live mode here. 
+      // If Firebase fails and falls back to local, isLiveMode() changes to false automatically.
+      setIsLive(isLiveMode());
+    });
+    return () => unsubscribe && unsubscribe();
+  }, []);
+
+  // Initialize Audio Context and EQ Graph
   useEffect(() => {
     if (!audioContextRef.current) {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -161,25 +143,33 @@ const App: React.FC = () => {
 
   const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     try {
+      // NOTE: For real global file upload, you'd need Firebase Storage. 
+      // This implementation handles LOCAL files nicely for the uploader, 
+      // but remote users can't access a local blob. 
+      // We will warn the user about this distinction.
       const newSongs: Song[] = Array.from(files).map((file: File) => {
         const name = file.name.replace(/\.[^/.]+$/, "");
         return {
           id: generateId(),
           title: name,
-          artist: "Local Upload", 
-          url: URL.createObjectURL(file),
+          artist: "Uploaded Track", 
+          url: URL.createObjectURL(file), // This only works on the uploader's device
           file: file,
           duration: 0,
           isCloud: false
         };
       });
 
-      setSongs((prev) => [...prev, ...newSongs]);
+      // Add each to DB (Local sync only for files usually, unless using Storage)
+      for (const song of newSongs) {
+        await addSongToLibrary(song);
+      }
+      
       setShowUploadToast({ show: true, count: newSongs.length });
       setTimeout(() => setShowUploadToast({ show: false, count: 0 }), 3000);
       setCurrentView('library');
@@ -190,8 +180,8 @@ const App: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleAddLink = () => {
-    const url = prompt("Paste direct audio link (mp3/wav) from web:");
+  const handleAddLink = async () => {
+    const url = prompt("Paste direct audio link (mp3/wav) from web:\n(This will be visible to everyone instantly if Online)");
     if (!url) return;
     const title = prompt("Enter Song Title:", "New Song") || "Unknown Title";
     const artist = prompt("Enter Artist:", "Unknown Artist") || "Unknown Artist";
@@ -205,7 +195,8 @@ const App: React.FC = () => {
       isCloud: true
     };
 
-    setSongs(prev => [...prev, newSong]);
+    await addSongToLibrary(newSong);
+
     setCurrentView('library');
     setShowUploadToast({ show: true, count: 1 });
     setTimeout(() => setShowUploadToast({ show: false, count: 0 }), 3000);
@@ -265,8 +256,8 @@ const App: React.FC = () => {
     setProgress(time);
   };
 
-  const removeSong = (id: string) => {
-    setSongs(prev => prev.filter(s => s.id !== id));
+  const removeSong = async (id: string) => {
+    await removeSongFromLibrary(id);
     if (currentSong?.id === id) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -376,9 +367,14 @@ const App: React.FC = () => {
                 <div className="flex items-center justify-between mb-8">
                   <div>
                     <h2 className="text-3xl font-bold mb-1">Library</h2>
-                    <p className="text-slate-400">
-                      {isAdmin ? "Manage All Tracks" : "Public Collection"}
-                    </p>
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <span>{isAdmin ? "Manage All Tracks" : "Public Collection"}</span>
+                      <span className="text-slate-600">•</span>
+                      <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${isLive ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'}`}>
+                         {isLive ? <Wifi size={12} /> : <WifiOff size={12} />}
+                         <span>{isLive ? "LIVE ONLINE" : "LOCAL SYNC"}</span>
+                      </div>
+                    </div>
                   </div>
                   
                   <button 
@@ -471,7 +467,7 @@ const App: React.FC = () => {
                 <LinkIcon size={20} />
               </button>
               <div className="absolute top-2 right-14 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                Add Link
+                Add Link (Global)
               </div>
            </div>
 
@@ -485,7 +481,7 @@ const App: React.FC = () => {
                 <Upload size={24} />
               </button>
               <div className="absolute top-3 right-16 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                Upload File
+                Upload File (Local)
               </div>
            </div>
         </div>
