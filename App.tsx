@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Sparkles, Menu, ExternalLink } from 'lucide-react';
+import { Loader2, Sparkles, Menu, ExternalLink, Lock } from 'lucide-react';
 import { Song, PlaylistAnalysis, View, EQPreset } from './types';
 import PlayerControls from './components/PlayerControls';
 import SongList from './components/SongList';
@@ -156,6 +156,7 @@ const App: React.FC = () => {
     
     // Switch to library to show upload success
     setCurrentView('library');
+    setMobileMenuOpen(false);
 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -268,16 +269,27 @@ const App: React.FC = () => {
       <Sidebar 
         currentView={currentView} 
         isAdmin={isAdmin}
-        onChangeView={setCurrentView} 
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        onChangeView={(view) => {
+          setCurrentView(view);
+          setMobileMenuOpen(false);
+        }} 
         onUploadClick={() => fileInputRef.current?.click()} 
-        onLoginClick={() => setIsLoginModalOpen(true)}
-        onLogoutClick={() => setIsAdmin(false)}
+        onLoginClick={() => {
+          setIsLoginModalOpen(true);
+          setMobileMenuOpen(false);
+        }}
+        onLogoutClick={() => {
+          setIsAdmin(false);
+          setMobileMenuOpen(false);
+        }}
       />
 
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 p-4 bg-slate-900/90 backdrop-blur-md z-40 border-b border-white/5 flex justify-between items-center">
         <h1 className="font-bold text-lg">Serhio Tomasito Music</h1>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+        <button onClick={() => setMobileMenuOpen(true)}>
           <Menu />
         </button>
       </div>
@@ -353,14 +365,27 @@ const App: React.FC = () => {
 
           {/* Footer Section */}
           <footer className="mt-12 mb-28 md:mb-24 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-slate-500 animate-in fade-in duration-700">
-            <a
-              href="https://www.serhio-tomasito.online/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-indigo-400 transition-colors uppercase tracking-widest font-medium"
-            >
-              © 2025 SERHIO TOMASITO. TOATE DREPTURILE REZERVATE.
-            </a>
+            <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
+               <a
+                href="https://www.serhio-tomasito.online/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-indigo-400 transition-colors uppercase tracking-widest font-medium"
+               >
+                © 2025 SERHIO TOMASITO. TOATE DREPTURILE REZERVATE.
+               </a>
+               
+               {/* Backup Admin Login Link */}
+               {!isAdmin && (
+                 <button 
+                   onClick={() => setIsLoginModalOpen(true)}
+                   className="flex items-center gap-1 opacity-40 hover:opacity-100 hover:text-indigo-400 transition-all"
+                 >
+                   <Lock size={10} />
+                   <span>Admin</span>
+                 </button>
+               )}
+            </div>
 
             <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5 hover:bg-white/10 transition-all hover:scale-105 group cursor-pointer">
               <span className="opacity-60 font-light">Sponsored by</span>
