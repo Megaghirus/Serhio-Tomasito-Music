@@ -17,7 +17,7 @@ const SongList: React.FC<SongListProps> = ({ songs, currentSong, isPlaying, isAd
       <div className="flex flex-col items-center justify-center h-64 text-slate-500 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/20">
         <Music size={48} className="mb-4 opacity-50" />
         <p>No songs uploaded yet.</p>
-        {isAdmin && <p className="text-sm mt-1">Use the sidebar to upload tracks.</p>}
+        {isAdmin && <p className="text-sm mt-1">Use the upload button or add a link.</p>}
       </div>
     );
   }
@@ -55,9 +55,9 @@ const SongList: React.FC<SongListProps> = ({ songs, currentSong, isPlaying, isAd
             {/* Icon indicating Cloud vs Local */}
             <div className="mr-3 text-slate-500">
                {song.isCloud ? (
-                 <Cloud size={16} className="text-blue-400/70" title="Cloud Track (Visible to All)" />
+                 <Cloud size={16} className="text-blue-400/70" title="Online Link" />
                ) : (
-                 <HardDrive size={16} className="text-orange-400/70" title="Local Upload (Visible only to you)" />
+                 <HardDrive size={16} className="text-orange-400/70" title="Local File" />
                )}
             </div>
 
@@ -71,17 +71,22 @@ const SongList: React.FC<SongListProps> = ({ songs, currentSong, isPlaying, isAd
             </div>
 
             <div className="text-slate-500 text-sm mr-4 hidden md:block">
-               {song.isCloud ? "Global" : "Local"}
+               {song.isCloud ? "Online" : "Local"}
             </div>
 
-            {isAdmin && !song.isCloud && (
+            {/* ADMIN DELETE BUTTON - Enabled for ALL songs now */}
+            {isAdmin && (
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
+                  // Simple confirm for cloud songs to prevent accidents
+                  if (song.isCloud && !window.confirm(`Delete online track "${song.title}" from list?`)) {
+                    return;
+                  }
                   onRemove(song.id);
                 }}
                 className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Remove Local Track"
+                title="Remove Track"
               >
                 <Trash2 size={18} />
               </button>

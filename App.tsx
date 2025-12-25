@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Sparkles, Menu, ExternalLink, Lock, Upload, CheckCircle, Music, Cloud } from 'lucide-react';
+import { Loader2, Sparkles, Menu, ExternalLink, Lock, Upload, CheckCircle, Music, Cloud, Link as LinkIcon } from 'lucide-react';
 import { Song, PlaylistAnalysis, View, EQPreset } from './types';
 import PlayerControls from './components/PlayerControls';
 import SongList from './components/SongList';
@@ -11,7 +11,6 @@ import EQPanel from './components/EQPanel';
 import { analyzePlaylistVibe } from './services/geminiService';
 
 // GLOBAL CLOUD LIBRARY
-// These songs are hosted on the internet and will be visible to ANYONE who visits the app
 const GLOBAL_LIBRARY: Song[] = [
   {
     id: 'cloud-1',
@@ -48,7 +47,6 @@ const GLOBAL_LIBRARY: Song[] = [
 ];
 
 const App: React.FC = () => {
-  // Initialize with Global Library
   const [songs, setSongs] = useState<Song[]>(GLOBAL_LIBRARY);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -78,13 +76,11 @@ const App: React.FC = () => {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null); // State to force re-render for Visualizer
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
-  // Theme derived from analysis or default
   const gradientFrom = analysis?.suggestedColorFrom || '#4f46e5'; 
   const gradientTo = analysis?.suggestedColorTo || '#ec4899';
 
-  // Initialize Audio Context and EQ Graph
   useEffect(() => {
     if (!audioContextRef.current) {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -94,9 +90,8 @@ const App: React.FC = () => {
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
       analyserRef.current = analyser;
-      setAnalyserNode(analyser); // Save to state for Visualizer prop
+      setAnalyserNode(analyser);
 
-      // Create 5 Filters for EQ (60, 250, 1000, 4000, 16000 Hz)
       const frequencies = [60, 250, 1000, 4000, 16000];
       const filters = frequencies.map((freq, i) => {
         const filter = ctx.createBiquadFilter();
@@ -109,12 +104,10 @@ const App: React.FC = () => {
       });
       filtersRef.current = filters;
 
-      // Create Source (handle potentially missing source or CORS in real apps, but ok for local)
       try {
         const source = ctx.createMediaElementSource(audioRef.current);
         sourceRef.current = source;
         
-        // Connect Graph: Source -> Filter1 -> ... -> Filter5 -> Analyser -> Destination
         let prevNode: AudioNode = source;
         filters.forEach(f => {
           prevNode.connect(f);
@@ -123,20 +116,17 @@ const App: React.FC = () => {
         prevNode.connect(analyser);
         analyser.connect(ctx.destination);
       } catch (e) {
-        console.warn("Audio Graph init failed (likely element already connected)", e);
+        console.warn("Audio Graph init failed", e);
       }
     }
   }, []);
 
-  // Handle EQ Presets
   const applyPreset = (preset: EQPreset) => {
     setCurrentPreset(preset);
     const filters = filtersRef.current;
     if (filters.length !== 5) return;
 
-    // Gains for [60, 250, 1k, 4k, 16k]
     let gains: number[] = [0, 0, 0, 0, 0];
-
     switch (preset) {
       case 'Rock': gains = [4, 2, -2, 3, 5]; break;
       case 'Pop': gains = [-1, 2, 4, 1, -1]; break;
@@ -145,16 +135,13 @@ const App: React.FC = () => {
       case 'Bass': gains = [8, 5, 1, 0, 0]; break;
       case 'Normal': default: gains = [0, 0, 0, 0, 0]; break;
     }
-
     filters.forEach((f, i) => {
-      // Smooth transition
       f.gain.setTargetAtTime(gains[i], audioContextRef.current?.currentTime || 0, 0.2);
     });
   };
 
   useEffect(() => {
     const audio = audioRef.current;
-    // Cross origin setting often needed for visuals on some browsers/CDN
     audio.crossOrigin = "anonymous"; 
     
     const updateProgress = () => setProgress(audio.currentTime);
@@ -170,13 +157,9 @@ const App: React.FC = () => {
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', onEnded);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, currentSong]);
 
-  const generateId = () => {
-    // Safer ID generation than crypto.randomUUID() for older browsers/http
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-  };
+  const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -184,7 +167,6 @@ const App: React.FC = () => {
 
     try {
       const newSongs: Song[] = Array.from(files).map((file: File) => {
-        // Remove extension from name
         const name = file.name.replace(/\.[^/.]+$/, "");
         return {
           id: generateId(),
@@ -197,33 +179,42 @@ const App: React.FC = () => {
         };
       });
 
-      setSongs((prev) => {
-        // Combine uploads with existing library
-        const updated = [...prev, ...newSongs];
-        return updated;
-      });
-      
-      // Show Success Toast
+      setSongs((prev) => [...prev, ...newSongs]);
       setShowUploadToast({ show: true, count: newSongs.length });
       setTimeout(() => setShowUploadToast({ show: false, count: 0 }), 3000);
-
-      // Switch to library to show upload success
       setCurrentView('library');
       setMobileMenuOpen(false);
     } catch (error) {
       console.error("Error processing files:", error);
-      alert("Error processing files. Please try again.");
     }
-
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleAddLink = () => {
+    const url = prompt("Paste direct audio link (mp3/wav) from web:");
+    if (!url) return;
+    const title = prompt("Enter Song Title:", "New Song") || "Unknown Title";
+    const artist = prompt("Enter Artist:", "Unknown Artist") || "Unknown Artist";
+
+    const newSong: Song = {
+      id: generateId(),
+      title,
+      artist,
+      url,
+      duration: 0,
+      isCloud: true
+    };
+
+    setSongs(prev => [...prev, newSong]);
+    setCurrentView('library');
+    setShowUploadToast({ show: true, count: 1 });
+    setTimeout(() => setShowUploadToast({ show: false, count: 0 }), 3000);
+  };
+
   const playSong = async (song: Song) => {
-    // Resume AudioContext if suspended (browser policy)
     if (audioContextRef.current?.state === 'suspended') {
       await audioContextRef.current.resume();
     }
-
     if (currentSong?.id === song.id) {
       if (isPlaying) {
         audioRef.current.pause();
@@ -246,7 +237,6 @@ const App: React.FC = () => {
 
   const handlePlayPause = async () => {
     if (currentSong) {
-      // Resume context here as well
       if (audioContextRef.current?.state === 'suspended') {
         await audioContextRef.current.resume();
       }
@@ -261,7 +251,6 @@ const App: React.FC = () => {
     const currentIndex = songs.findIndex(s => s.id === currentSong.id);
     const nextIndex = (currentIndex + 1) % songs.length;
     playSong(songs[nextIndex]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong, songs]);
 
   const handlePrev = useCallback(() => {
@@ -269,7 +258,6 @@ const App: React.FC = () => {
     const currentIndex = songs.findIndex(s => s.id === currentSong.id);
     const prevIndex = currentIndex === 0 ? songs.length - 1 : currentIndex - 1;
     playSong(songs[prevIndex]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong, songs]);
 
   const handleSeek = (time: number) => {
@@ -329,7 +317,6 @@ const App: React.FC = () => {
         onLogin={handleLoginSuccess}
       />
 
-      {/* Admin Success Toast */}
       {showAdminToast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300">
           <Lock size={20} className="text-white" />
@@ -337,15 +324,13 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Upload Success Toast */}
       {showUploadToast.show && (
         <div className="fixed top-20 md:top-6 left-1/2 -translate-x-1/2 z-[100] bg-indigo-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300">
           <Music size={20} className="text-white" />
-          <span className="font-semibold">{showUploadToast.count} songs added to library</span>
+          <span className="font-semibold">{showUploadToast.count} songs added</span>
         </div>
       )}
 
-      {/* Sidebar Navigation */}
       <Sidebar 
         currentView={currentView} 
         isAdmin={isAdmin}
@@ -366,7 +351,6 @@ const App: React.FC = () => {
         }}
       />
 
-      {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 p-4 bg-slate-900/90 backdrop-blur-md z-40 border-b border-white/5 flex justify-between items-center">
         <h1 className="font-bold text-lg">Serhio Tomasito Music</h1>
         <button onClick={() => setMobileMenuOpen(true)}>
@@ -374,12 +358,8 @@ const App: React.FC = () => {
         </button>
       </div>
 
-      {/* Main Content Area */}
       <main className="flex-1 h-full overflow-y-auto relative scroll-smooth bg-gradient-to-b from-transparent to-slate-950/50">
-        
-        {/* Content Wrapper */}
         <div className="p-6 md:p-8 pt-20 md:pt-8 max-w-7xl mx-auto min-h-full flex flex-col">
-          
           <div className="flex-1">
             {currentView === 'home' && (
                <HomeView 
@@ -397,7 +377,7 @@ const App: React.FC = () => {
                   <div>
                     <h2 className="text-3xl font-bold mb-1">Library</h2>
                     <p className="text-slate-400">
-                      {isAdmin ? "Global & Local Tracks" : "Public Collection"}
+                      {isAdmin ? "Manage All Tracks" : "Public Collection"}
                     </p>
                   </div>
                   
@@ -412,7 +392,6 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* Visualizer in Library */}
                   <div className="lg:col-span-3 h-48 bg-black/40 rounded-3xl border border-white/10 overflow-hidden relative flex items-center justify-center">
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-950/80 z-10"></div>
                        {currentSong && isPlaying ? (
@@ -443,7 +422,6 @@ const App: React.FC = () => {
             )}
           </div>
 
-          {/* Footer Section */}
           <footer className="mt-12 mb-28 md:mb-24 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-slate-500 animate-in fade-in duration-700">
             <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
                <a
@@ -454,8 +432,6 @@ const App: React.FC = () => {
                >
                 © 2025 SERHIO TOMASITO. TOATE DREPTURILE REZERVATE.
                </a>
-               
-               {/* Backup Admin Login Link */}
                {!isAdmin && (
                  <button 
                    onClick={() => setIsLoginModalOpen(true)}
@@ -466,7 +442,6 @@ const App: React.FC = () => {
                  </button>
                )}
             </div>
-
             <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5 hover:bg-white/10 transition-all hover:scale-105 group cursor-pointer">
               <span className="opacity-60 font-light">Sponsored by</span>
               <a
@@ -480,27 +455,42 @@ const App: React.FC = () => {
               </a>
             </div>
           </footer>
-
         </div>
       </main>
 
-      {/* FLOATING ADMIN UPLOAD BUTTON - Always visible when Admin */}
+      {/* ADMIN ACTION BUTTONS */}
       {isAdmin && (
-        <div className="fixed bottom-28 right-6 z-40 animate-in zoom-in duration-300">
-           <button 
-             onClick={() => fileInputRef.current?.click()}
-             className="w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
-             title="Upload Music"
-           >
-             <Upload size={24} />
-           </button>
-           <div className="absolute -top-8 right-0 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 hover:opacity-100 transition-opacity whitespace-nowrap">
-             Upload
+        <div className="fixed bottom-28 right-6 z-40 flex flex-col gap-4 animate-in zoom-in duration-300 items-end">
+           {/* Link Upload Button */}
+           <div className="relative group">
+              <button 
+                onClick={handleAddLink}
+                className="w-12 h-12 bg-slate-700 hover:bg-slate-600 text-white rounded-full shadow-xl flex items-center justify-center transition-transform hover:scale-110 active:scale-95 border border-white/10"
+                title="Add via Link"
+              >
+                <LinkIcon size={20} />
+              </button>
+              <div className="absolute top-2 right-14 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                Add Link
+              </div>
+           </div>
+
+           {/* File Upload Button */}
+           <div className="relative group">
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
+                title="Upload Files"
+              >
+                <Upload size={24} />
+              </button>
+              <div className="absolute top-3 right-16 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                Upload File
+              </div>
            </div>
         </div>
       )}
 
-      {/* Global Player */}
       <EQPanel 
         isOpen={eqOpen} 
         currentPreset={currentPreset}
