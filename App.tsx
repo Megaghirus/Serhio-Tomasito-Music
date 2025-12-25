@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Sparkles, Menu, ExternalLink, Lock } from 'lucide-react';
+import { Loader2, Sparkles, Menu, ExternalLink, Lock, Upload, CheckCircle } from 'lucide-react';
 import { Song, PlaylistAnalysis, View, EQPreset } from './types';
 import PlayerControls from './components/PlayerControls';
 import SongList from './components/SongList';
@@ -28,6 +28,7 @@ const App: React.FC = () => {
   // Admin State
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [showAdminToast, setShowAdminToast] = useState(false);
   
   // Audio Refs
   const audioRef = useRef<HTMLAudioElement>(new Audio());
@@ -243,6 +244,13 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLoginSuccess = () => {
+    setIsAdmin(true);
+    setCurrentView('library');
+    setShowAdminToast(true);
+    setTimeout(() => setShowAdminToast(false), 3000);
+  };
+
   return (
     <div 
       className="h-screen w-screen flex text-white overflow-hidden font-outfit"
@@ -262,8 +270,16 @@ const App: React.FC = () => {
       <AdminLoginModal 
         isOpen={isLoginModalOpen} 
         onClose={() => setIsLoginModalOpen(false)}
-        onLogin={() => setIsAdmin(true)}
+        onLogin={handleLoginSuccess}
       />
+
+      {/* Admin Success Toast */}
+      {showAdminToast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300">
+          <CheckCircle size={20} className="text-white" />
+          <span className="font-semibold">Welcome Back, Admin</span>
+        </div>
+      )}
 
       {/* Sidebar Navigation */}
       <Sidebar 
@@ -403,6 +419,22 @@ const App: React.FC = () => {
 
         </div>
       </main>
+
+      {/* FLOATING ADMIN UPLOAD BUTTON - Always visible when Admin */}
+      {isAdmin && (
+        <div className="fixed bottom-28 right-6 z-40 animate-in zoom-in duration-300">
+           <button 
+             onClick={() => fileInputRef.current?.click()}
+             className="w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
+             title="Upload Music"
+           >
+             <Upload size={24} />
+           </button>
+           <div className="absolute -top-8 right-0 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 hover:opacity-100 transition-opacity whitespace-nowrap">
+             Upload
+           </div>
+        </div>
+      )}
 
       {/* Global Player */}
       <EQPanel 
